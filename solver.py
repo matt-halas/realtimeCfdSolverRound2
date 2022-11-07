@@ -17,9 +17,9 @@ X_center = np.arange(dx / 2, NX * dx, dx)
 Y_center = np.arange(dy / 2, NY * dy, dy)
 
 cell_centers = np.zeros((NX*NY, 2))
-for i in range(NX):
-    for j in range(NY):
-        cell_centers[two_to_one(i, j)]
+for j in range(NY):
+    for i in range(NX):
+        cell_centers[two_to_one(i, j)] = [X_center[i], Y_center[j]]
 
 
 VISC = 1
