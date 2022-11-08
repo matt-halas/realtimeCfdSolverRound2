@@ -13,13 +13,13 @@ dx = 1
 NY = 40
 dy = 1
 
-X_center = np.arange(dx / 2, NX * dx, dx)
-Y_center = np.arange(dy / 2, NY * dy, dy)
+X_center = np.arange(0, NX, 1, dtype=int)
+Y_center = np.arange(0, NY, 1, dtype=int)
 
-cell_centers = np.zeros((NX*NY, 2))
+cell_idx = np.zeros((NX*NY, 2))
 for j in range(NY):
     for i in range(NX):
-        cell_centers[two_to_one(i, j)] = [X_center[i], Y_center[j]]
+        cell_idx[two_to_one(i, j)] = [X_center[i], Y_center[j]]
 
 
 VISC = 1
@@ -29,8 +29,10 @@ dt = 0.1
 dye_c = np.zeros(NX*NY)
 dye_n = np.zeros(NX*NY)
 
-vx = np.zeros(NX*NY)
-vy = np.zeros(NX*NY)
+angle = np.pi/6 #Angle of uniform flow field in radians
+magnitude = 5 #Magnitude of uniform flow field
+vx = np.ones(NX*NY) * magnitude * np.cos(angle)
+vy = np.ones(NX*NY) * magnitude * np.sin(angle)
 
 vx0 = np.zeros(NX*NY)
 vy0 = np.zeros(NX*NY)
@@ -101,12 +103,28 @@ def set_diff_bnd():
     dye_n[two_to_one(0, NY-1)] = np.mean([dye_n[two_to_one(0, NY-2)], dye_n[two_to_one(1, NY-1)]])
     dye_n[two_to_one(NX-1, NY-1)] = np.mean([dye_n[two_to_one(NX-2, NY-1)], dye_n[two_to_one(NX-1, NY-2)]])
 
+def advect():
+    for i in range(1, NX-1):
+        for j in range(1, NY-1):
+            x_cell, y_cell = cell_idx[two_to_one(i, j)] #cell_idx is only the index of a given cell
+            x_cell*=dx #Multiply by dx and dy to get the actual physical location to make it compatible
+            y_cell*=dy #with dx and dy other than 1
+            x_vel = vx[two_to_one(i,j)]
+            y_vel = vy[two_to_one(i,j)]
+            x_adv = x_cell - x_vel*dt
+            y_adv = y_cell - y_vel*dt
+            x_idx = np.floor(x_adv / dx, dtype=int)
+            y_idx = np.floor(y_adv / dy, dtype=int)
+            #dye_n[two_to_one(i, j)] = 
+
+            
     
 
 def runSolver():
     while True:
         check_events()
         diffuse()
+        advect()
         draw_dye()
         pygame.display.flip()
 
