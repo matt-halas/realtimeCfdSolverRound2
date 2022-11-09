@@ -16,6 +16,10 @@ dy = 1
 X_center = np.arange(0, NX, 1, dtype=int)
 Y_center = np.arange(0, NY, 1, dtype=int)
 
+cell_center = np.zeros((NX*NY, 2))
+for j in range(NY):
+    for i in range(NX):
+        cell_center[two_to_one(i, j)] = [X_center[i], Y_center[j]]
 cell_idx = np.zeros((NX*NY, 2))
 for j in range(NY):
     for i in range(NX):
@@ -29,8 +33,8 @@ dt = 0.1
 dye_c = np.zeros(NX*NY)
 dye_n = np.zeros(NX*NY)
 
-angle = np.pi/6 #Angle of uniform flow field in radians
-magnitude = 5 #Magnitude of uniform flow field
+angle = -np.pi/6 #Angle of uniform flow field in radians
+magnitude = 1 #Magnitude of uniform flow field
 vx = np.ones(NX*NY) * magnitude * np.cos(angle)
 vy = np.ones(NX*NY) * magnitude * np.sin(angle)
 
@@ -74,7 +78,6 @@ def draw_dye():
 def diffuse():
     dye_n[:] = dye_c[:]
     calc_diffuse()
-    set_diff_bnd()
     dye_c[:] = dye_n[:]
 
 def calc_diffuse(iterations=10):
@@ -106,16 +109,28 @@ def set_diff_bnd():
 def advect():
     for i in range(1, NX-1):
         for j in range(1, NY-1):
-            x_cell, y_cell = cell_idx[two_to_one(i, j)] #cell_idx is only the index of a given cell
-            x_cell*=dx #Multiply by dx and dy to get the actual physical location to make it compatible
-            y_cell*=dy #with dx and dy other than 1
+            x_cell, y_cell = cell_center[two_to_one(i, j)] 
             x_vel = vx[two_to_one(i,j)]
             y_vel = vy[two_to_one(i,j)]
             x_adv = x_cell - x_vel*dt
             y_adv = y_cell - y_vel*dt
-            x_idx = np.floor(x_adv / dx, dtype=int)
-            y_idx = np.floor(y_adv / dy, dtype=int)
-            #dye_n[two_to_one(i, j)] = 
+            xi = np.int(np.floor(x_adv / dx))
+            yi = np.int(np.floor(y_adv / dy))
+            dye1 = lerp(cell_center[two_to_one(xi, yi), 0],
+                        cell_center[two_to_one(xi+1, yi), 0],
+                        x_adv, dye_c[two_to_one(xi, yi)],
+                        dye_c[two_to_one(xi+1, yi)])
+            dye2 = lerp(cell_center[two_to_one(xi, yi+1), 0],
+                        cell_center[two_to_one(xi+1, yi+1), 0],
+                        x_adv, dye_c[two_to_one(xi, yi+1)],
+                        dye_c[two_to_one(xi+1, yi+1)])
+            dye_n[two_to_one(i, j)] = lerp(cell_center[two_to_one(xi, yi), 1],
+                                           cell_center[two_to_one(xi, yi+1), 1],
+                                           y_adv, dye1, dye2)
+            #Interpolating incorrectly, fix it
+    
+    set_diff_bnd()
+    dye_c[:] = dye_n[:]
 
             
     
