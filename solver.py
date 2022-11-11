@@ -25,21 +25,18 @@ for j in range(NY):
     for i in range(NX):
         cell_idx[two_to_one(i, j)] = [X_center[i], Y_center[j]]
 
-
-VISC = 1
-DIFF = 0.1
+diffusivity = 1
+viscosity = 0.0001
 dt = 0.1
 
 dye_c = np.zeros(NX*NY)
 dye_n = np.zeros(NX*NY)
 
-angle = -np.pi/6 #Angle of uniform flow field in radians
-magnitude = 1 #Magnitude of uniform flow field
-vx = np.ones(NX*NY) * magnitude * np.cos(angle)
-vy = np.ones(NX*NY) * magnitude * np.sin(angle)
+vx_n = np.ones(NX*NY)
+vy_n = np.ones(NX*NY)
 
-vx0 = np.zeros(NX*NY)
-vy0 = np.zeros(NX*NY)
+vx_c = np.zeros(NX*NY)
+vy_c = np.zeros(NX*NY)
 
 pygame.init()
 screen = pygame.display.set_mode((NX * CELL_SIZE, NY * CELL_SIZE))
@@ -62,6 +59,7 @@ def add_dye(dye_speed=100):
     x_idx = mouse_pos[0] // CELL_SIZE
     y_idx = mouse_pos[1] // CELL_SIZE
     dye_c[two_to_one(x_idx, y_idx)] += dye_speed
+    vx_c[two_to_one(x_idx, y_idx)] += 2
 
 def draw_dye():
     # Uses the dye_c value at the end of each time step to draw on the display
@@ -75,23 +73,50 @@ def draw_dye():
             rect_color = (dye_c[i],dye_c[i],dye_c[i])
         pygame.draw.rect(screen, rect_color, rect)
 
-def diffuse():
-    dye_n[:] = dye_c[:]
-    calc_diffuse()
-    dye_c[:] = dye_n[:]
-
-def calc_diffuse(iterations=10):
+def diffuse(y_c, y_n, diff, iterations=10):
     # Try in a few different ways - Std diffusion, Gauss Siedel relaxation with d_n=0 and d_n=d_c
     # Dye_n is not solving correctly, probably missed the denominator
-    for k in range(iterations):
+    a = diff * dt * dx * dy
+    '''for k in range(iterations):
         for i in range(1, NX-1):
             for j in range(1, NY-1):
-                dye_n[two_to_one(i, j)] = (dye_c[two_to_one(i, j)] \
-                    + DIFF * 0.25 * (dye_n[two_to_one(i+1, j)]
-                    + dye_n[two_to_one(i-1, j)]
-                    + dye_n[two_to_one(i, j+1)]
-                    + dye_n[two_to_one(i, j-1)])) \
-                        / (1 + DIFF)
+                y_n[two_to_one(i, j)] = (y_c[two_to_one(i, j)] \
+                    + a * 0.25 * (y_n[two_to_one(i+1, j)]
+                    + y_n[two_to_one(i-1, j)]
+                    + y_n[two_to_one(i, j+1)]
+                    + y_n[two_to_one(i, j-1)])) \
+                        / (1 + a)'''
+    #Current diffusion routine was too slow, going back to the bad one
+    for i in range(1, NX-1):
+        for j in range(1, NY-1):
+            y_n[two_to_one(i, j)] = y_c[two_to_one(i, j)] \
+                + a * 0.25 * (y_c[two_to_one(i+1, j)]
+                + y_c[two_to_one(i-1, j)]
+                + y_c[two_to_one(i, j+1)]
+                + y_c[two_to_one(i, j-1)]
+                - 4 * y_c[two_to_one(i, j)])
+
+def advect(y_c, y_n):
+    for i in range(1, NX-1):
+        for j in range(1, NY-1):
+            x_cell, y_cell = cell_center[two_to_one(i, j)]
+            x_vel = vx_c[two_to_one(i,j)]
+            y_vel = vy_c[two_to_one(i,j)]
+            x_adv = x_cell - x_vel*dt
+            y_adv = y_cell - y_vel*dt
+            xi = np.int(np.floor(x_adv / dx))
+            yi = np.int(np.floor(y_adv / dy))
+            interpx1 = lerp(cell_center[two_to_one(xi, yi), 0],
+                        cell_center[two_to_one(xi+1, yi), 0],
+                        x_adv, y_c[two_to_one(xi, yi)],
+                        y_c[two_to_one(xi+1, yi)])
+            interpx2 = lerp(cell_center[two_to_one(xi, yi+1), 0],
+                        cell_center[two_to_one(xi+1, yi+1), 0],
+                        x_adv, y_c[two_to_one(xi, yi+1)],
+                        y_c[two_to_one(xi+1, yi+1)])
+            y_n[two_to_one(i, j)] = lerp(cell_center[two_to_one(xi, yi), 1],
+                                           cell_center[two_to_one(xi, yi+1), 1],
+                                           y_adv, interpx1, interpx2)
 
 def set_diff_bnd():
     # In this state, the boundaries keep all the dye in the simulation
@@ -105,41 +130,31 @@ def set_diff_bnd():
     dye_n[two_to_one(NX-1, 0)] = np.mean([dye_n[two_to_one(NX-2, 0)], dye_n[two_to_one(NX-1, 1)]])
     dye_n[two_to_one(0, NY-1)] = np.mean([dye_n[two_to_one(0, NY-2)], dye_n[two_to_one(1, NY-1)]])
     dye_n[two_to_one(NX-1, NY-1)] = np.mean([dye_n[two_to_one(NX-2, NY-1)], dye_n[two_to_one(NX-1, NY-2)]])
-
-def advect():
-    for i in range(1, NX-1):
-        for j in range(1, NY-1):
-            x_cell, y_cell = cell_center[two_to_one(i, j)] 
-            x_vel = vx[two_to_one(i,j)]
-            y_vel = vy[two_to_one(i,j)]
-            x_adv = x_cell - x_vel*dt
-            y_adv = y_cell - y_vel*dt
-            xi = np.int(np.floor(x_adv / dx))
-            yi = np.int(np.floor(y_adv / dy))
-            dye1 = lerp(cell_center[two_to_one(xi, yi), 0],
-                        cell_center[two_to_one(xi+1, yi), 0],
-                        x_adv, dye_c[two_to_one(xi, yi)],
-                        dye_c[two_to_one(xi+1, yi)])
-            dye2 = lerp(cell_center[two_to_one(xi, yi+1), 0],
-                        cell_center[two_to_one(xi+1, yi+1), 0],
-                        x_adv, dye_c[two_to_one(xi, yi+1)],
-                        dye_c[two_to_one(xi+1, yi+1)])
-            dye_n[two_to_one(i, j)] = lerp(cell_center[two_to_one(xi, yi), 1],
-                                           cell_center[two_to_one(xi, yi+1), 1],
-                                           y_adv, dye1, dye2)
-            #Interpolating incorrectly, fix it
-    
-    set_diff_bnd()
     dye_c[:] = dye_n[:]
 
-            
+def stepDye():
+    dye_n[:] = dye_c[:]
+    diffuse(dye_c, dye_n, diffusivity)
+    dye_c[:] = dye_n[:]
+    advect(dye_c, dye_n)
+    dye_c[:] = dye_n[:]
+    set_diff_bnd()
+
+def stepVel():
+    vx_n[:], vy_n[:] = [vx_c[:], vy_c[:]]
+    diffuse(vx_c, vx_n, viscosity)
+    diffuse(vy_c, vy_n, viscosity)
+    vx_c[:], vy_c[:] = [vx_n[:], vy_n[:]]
+    advect(vx_c, vx_n)
+    advect(vy_c, vy_n)
+    vx_c[:], vy_c[:] = [vx_n[:], vy_n[:]]
     
 
 def runSolver():
     while True:
         check_events()
-        diffuse()
-        advect()
+        stepDye()
+        stepVel()
         draw_dye()
         pygame.display.flip()
 
@@ -150,4 +165,3 @@ if __name__ == "__main__":
 #TODO: Add more comments
 #TODO: Add boundary conditions - Diffusion done
 #TODO: Add units with physical meaning
-#TODO: Add velocity field
