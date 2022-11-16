@@ -26,7 +26,7 @@ for j in range(NY):
         cell_idx[two_to_one(i, j)] = [X_center[i], Y_center[j]]
 
 diffusivity = 1
-viscosity = 0.0001
+viscosity = 1
 dt = 0.1
 
 dye_c = np.zeros(NX*NY)
@@ -37,6 +37,9 @@ vy_n = np.ones(NX*NY)
 
 vx_c = np.zeros(NX*NY)
 vy_c = np.zeros(NX*NY)
+
+p = np.zeros(NX*NY)
+div = np.zeros(NX*NY)
 
 pygame.init()
 screen = pygame.display.set_mode((NX * CELL_SIZE, NY * CELL_SIZE))
@@ -60,6 +63,7 @@ def add_dye(dye_speed=100):
     y_idx = mouse_pos[1] // CELL_SIZE
     dye_c[two_to_one(x_idx, y_idx)] += dye_speed
     vx_c[two_to_one(x_idx, y_idx)] += 2
+    vy_c[two_to_one(x_idx, y_idx)] += 2
 
 def draw_dye():
     # Uses the dye_c value at the end of each time step to draw on the display
@@ -73,11 +77,11 @@ def draw_dye():
             rect_color = (dye_c[i],dye_c[i],dye_c[i])
         pygame.draw.rect(screen, rect_color, rect)
 
-def diffuse(y_c, y_n, diff, iterations=10):
+def diffuse(y_c, y_n, diff):
     # Try in a few different ways - Std diffusion, Gauss Siedel relaxation with d_n=0 and d_n=d_c
     # Dye_n is not solving correctly, probably missed the denominator
     a = diff * dt * dx * dy
-    '''for k in range(iterations):
+    for k in range(20):
         for i in range(1, NX-1):
             for j in range(1, NY-1):
                 y_n[two_to_one(i, j)] = (y_c[two_to_one(i, j)] \
@@ -85,16 +89,16 @@ def diffuse(y_c, y_n, diff, iterations=10):
                     + y_n[two_to_one(i-1, j)]
                     + y_n[two_to_one(i, j+1)]
                     + y_n[two_to_one(i, j-1)])) \
-                        / (1 + a)'''
+                        / (1 + a)
     #Current diffusion routine was too slow, going back to the bad one
-    for i in range(1, NX-1):
+'''    for i in range(1, NX-1):
         for j in range(1, NY-1):
             y_n[two_to_one(i, j)] = y_c[two_to_one(i, j)] \
                 + a * 0.25 * (y_c[two_to_one(i+1, j)]
                 + y_c[two_to_one(i-1, j)]
                 + y_c[two_to_one(i, j+1)]
                 + y_c[two_to_one(i, j-1)]
-                - 4 * y_c[two_to_one(i, j)])
+                - 4 * y_c[two_to_one(i, j)])'''
 
 def advect(y_c, y_n):
     for i in range(1, NX-1):
@@ -118,6 +122,24 @@ def advect(y_c, y_n):
                                            cell_center[two_to_one(xi, yi+1), 1],
                                            y_adv, interpx1, interpx2)
 
+def project(vx_c, vy_c):
+    p[:] = 0
+    for i in range(1, NX-1):
+        for j in range(1, NY-1):
+            div[two_to_one(i, j)] = -(vx_c[two_to_one(i+1, j)] - vx_c[two_to_one(i-1, j)]) / (2 * dx) \
+                - (vy_c[two_to_one(i, j+1)] - vy_c[two_to_one(i, j-1)]) / (2 * dy)
+    
+    for k in range(20):
+        for i in range(1, NX-1):
+            for j in range(1, NY-1):
+                p[two_to_one(i, j)] = (div[two_to_one(i, j)] + p[two_to_one(i-1, j)] + p[two_to_one(i+1, j)] \
+                    + p[two_to_one(i, j+1)] + p[two_to_one(i, j-1)]) / 4
+    
+    for i in range(1, NX-1):
+        for j in range(1, NY-1):
+            vx_c -= (p[two_to_one(i+1, j)] - p[two_to_one(i-1, j)]) / (2 * dx)
+            vy_c -= (p[two_to_one(i, j+1)] - p[two_to_one(i, j-1)]) / (2 * dy)
+
 def set_diff_bnd():
     # In this state, the boundaries keep all the dye in the simulation
     for i in range(1, NX-1):
@@ -132,6 +154,18 @@ def set_diff_bnd():
     dye_n[two_to_one(NX-1, NY-1)] = np.mean([dye_n[two_to_one(NX-2, NY-1)], dye_n[two_to_one(NX-1, NY-2)]])
     dye_c[:] = dye_n[:]
 
+def set_vel_bnd():
+    for i in range(0, NX):
+        vx_c[two_to_one(i, 0)] = 0
+        vx_c[two_to_one(i, NY-1)] = 0
+        vy_c[two_to_one(i, 0)] = 0
+        vy_c[two_to_one(i, NY-1)] = 0
+    for j in range(0, NY):
+        vx_c[two_to_one(0, j)] = 0
+        vx_c[two_to_one(NX-1, j)] = 0
+        vy_c[two_to_one(0, j)] = 0
+        vy_c[two_to_one(NX-1, j)] = 0
+
 def stepDye():
     dye_n[:] = dye_c[:]
     diffuse(dye_c, dye_n, diffusivity)
@@ -141,6 +175,7 @@ def stepDye():
     set_diff_bnd()
 
 def stepVel():
+    set_vel_bnd()
     vx_n[:], vy_n[:] = [vx_c[:], vy_c[:]]
     diffuse(vx_c, vx_n, viscosity)
     diffuse(vy_c, vy_n, viscosity)
@@ -148,6 +183,8 @@ def stepVel():
     advect(vx_c, vx_n)
     advect(vy_c, vy_n)
     vx_c[:], vy_c[:] = [vx_n[:], vy_n[:]]
+    project(vx_c, vy_c)
+    set_vel_bnd()
     
 
 def runSolver():
