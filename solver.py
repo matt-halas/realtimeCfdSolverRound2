@@ -62,8 +62,8 @@ def add_dye(dye_speed=100):
     x_idx = mouse_pos[0] // CELL_SIZE
     y_idx = mouse_pos[1] // CELL_SIZE
     dye_c[two_to_one(x_idx, y_idx)] += dye_speed
-    vx_c[two_to_one(x_idx, y_idx)] += 2
-    vy_c[two_to_one(x_idx, y_idx)] += 2
+    vx_c[two_to_one(x_idx, y_idx)] = 2
+    vy_c[two_to_one(x_idx, y_idx)] = 2
 
 def draw_dye():
     # Uses the dye_c value at the end of each time step to draw on the display
