@@ -25,11 +25,11 @@ class Solver:
         self.dye = np.zeros((self.NX, self.NY))
         self.dye_n = np.zeros((self.NX, self.NY))
 
-        self.vx = np.ones((self.NX, self.NY)) * 5
-        self.vx_n = np.ones((self.NX, self.NY))
+        self.vx = np.zeros((self.NX, self.NY))
+        self.vx_n = np.zeros((self.NX, self.NY))
 
-        self.vy = np.ones((self.NX, self.NY)) * 2.5
-        self.vy_n = np.ones((self.NX, self.NY))
+        self.vy = np.zeros((self.NX, self.NY))
+        self.vy_n = np.zeros((self.NX, self.NY))
 
         self.p = np.zeros((self.NX, self.NY))
         self.div = np.zeros((self.NX, self.NY))
@@ -53,6 +53,7 @@ class Solver:
         while True:
             self.check_events()
             self.step_dye()
+            self.step_vel()
             self.update_screen()
 
     def check_events(self):
@@ -92,14 +93,29 @@ class Solver:
         self.dye_n[:] = self.dye[:]
         self.advect(self.dye, self.dye_n)
         self.dye[:] = self.dye_n[:]
+        self.set_cont_bnd(self.dye)
         self.diffuse(self.dye, self.dye_n)
         self.dye[:] = self.dye_n[:]
         self.dissolve_dye()
-        self.set_dye_bnd()
+        self.set_cont_bnd(self.dye)
     
-    def diffuse(self, y, y_n):
+    def step_vel(self):
+        self.vx_n[:] = self.vx[:]
+        self.vy_n[:] = self.vy[:]
+        self.diffuse(self.vx, self.vx_n, isVel=True)
+        self.diffuse(self.vy, self.vy_n, isVel=True)
+        self.set_vel_bnd()
+        self.project()
+        self.vx_n[:] = self.vx[:]
+        self.vy_n[:] = self.vy[:]
+        self.advect(self.vx, self.vx_n)
+        self.advect(self.vy, self.vy_n)
+        self.project()
+        self.set_vel_bnd()
+    
+    def diffuse(self, y, y_n, isVel=False):
         a = self.diff * self.dt * self.cellSizeX * self.cellSizeY
-        for k in range(20):
+        for k in range(10):
             for i in range(1, self.NX-1):
                 for j in range(1, self.NY-1):
                     y_n[i, j] = (y[i, j] \
@@ -107,6 +123,10 @@ class Solver:
                         + y_n[i-1, j]
                         + y_n[i, j+1]
                         + y_n[i, j-1])) / (1 + a)
+            if isVel:
+                self.set_vel_bnd()
+            else:
+                self.set_cont_bnd(y_n)
 
     def advect(self, y, y_n):
         for i in range(1, self.NX-1):
@@ -132,7 +152,26 @@ class Solver:
         self.p[:] = 0
         self.div[:] = 0
 
-        self.div[1:self.NX-1, 1:self.NY-1] = 0
+        self.div[1:self.NX-1, 1:self.NY-1] = (self.vx[2:, 1:self.NY-1] \
+            - self.vx[0:-2, 1:self.NY-1]) / (2 * self.cellSizeX) \
+            + (self.vy[1:self.NX-1, 2:] - self.vy[1:self.NX-1, 0:-2]) \
+            / (2 * self.cellSizeY)
+        
+        self.set_cont_bnd(self.div)
+        self.set_cont_bnd(self.p)
+        
+        for k in range(10):
+            for i in range(1, NX-1):
+                for j in range(1, NY-1):
+                    self.p[i,j] = (self.div[i,j] + self.p[i+1,j] + self.p[i-1,j]
+                        + self.p[i,j+1] + self.p[i,j-1]) / 4
+            self.set_cont_bnd(self.p)
+        
+        self.vx[1:self.NX-1, 1:self.NY] -= (self.p[2:, 1:self.NY]
+            - self.p[:-2, 1:self.NY]) / 2
+        self.vy[1:self.NX-1, 1:self.NY] -= (self.p[1:self.NX, 2:]
+            - self.p[1:self.NX, :-2]) / 2
+        self.set_vel_bnd()
     
     def set_within_bnd(self, idx, n):
         if idx > n-1:
@@ -141,11 +180,30 @@ class Solver:
             idx = 0
         return idx
 
-    def set_dye_bnd(self):
-        self.dye[1:-1, 0] = self.dye[1:-1, 1]
-        self.dye[1:-1, -1] = self.dye[1:-1, -2]
-        self.dye[0, :] = self.dye[1, :]
-        self.dye[-1, :] = self.dye[-2, :]
+    def set_cont_bnd(self, x):
+        x[1:-1, 0] = x[1:-1, 1]
+        x[1:-1, -1] = x[1:-1, -2]
+        x[0, 1:-1] = x[1, 1:-1]
+        x[-1, 1:-1] = x[-2, 1:-1]
+        self.set_corner_bnd(x)
+    
+    def set_vel_bnd(self):
+        self.vx[1:-1, 0] = self.vx[1:-1, 1]
+        self.vx[1:-1, -1] = self.vx[1:-1, -2]
+        self.vx[0, 1:-1] = -self.vx[1, 1:-1]
+        self.vx[-1, 1:-1] = -self.vx[-2, 1:-1]
+        self.vy[1:-1, 0] = -self.vy[1:-1, 1]
+        self.vy[1:-1, -1] = -self.vy[1:-1, -2]
+        self.vy[0, 1:-1] = self.vy[1, 1:-1]
+        self.vy[-1, 1:-1] = self.vy[-2, 1:-1]
+        self.set_corner_bnd(self.vx)
+        self.set_corner_bnd(self.vy)
+    
+    def set_corner_bnd(self, x):
+        x[0, 0] = (x[1, 0] + x[0, 1]) / 2
+        x[-1, 0] = (x[-2, 0] + x[-1, 1]) / 2
+        x[0, -1] = (x[0, -2] + x[1, -1]) / 2
+        x[-1, -1] = (x[-2, -1] + x[-1, -2]) / 2
     
     def dissolve_dye(self):
         self.dye *= (1-self.dissolveRate)
