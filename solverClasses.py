@@ -73,6 +73,7 @@ class Solver:
         x_idx = np.int(mouse_pos[0] // self.cellSizeX)
         y_idx = np.int(mouse_pos[1] // self.cellSizeY)
         self.dye[x_idx, y_idx] += dyeSpeed
+        self.vx[x_idx, y_idx] = 1
 
     def update_screen(self):
         #Uses the dye value at the end of each time step to draw on the display
@@ -161,15 +162,15 @@ class Solver:
         self.set_cont_bnd(self.p)
         
         for k in range(10):
-            for i in range(1, NX-1):
-                for j in range(1, NY-1):
+            for i in range(1, self.NX-1):
+                for j in range(1, self.NY-1):
                     self.p[i,j] = (self.div[i,j] + self.p[i+1,j] + self.p[i-1,j]
                         + self.p[i,j+1] + self.p[i,j-1]) / 4
             self.set_cont_bnd(self.p)
         
         self.vx[1:self.NX-1, 1:self.NY] -= (self.p[2:, 1:self.NY]
             - self.p[:-2, 1:self.NY]) / 2
-        self.vy[1:self.NX-1, 1:self.NY] -= (self.p[1:self.NX, 2:]
+        self.vy[1:self.NX, 1:self.NY-1] -= (self.p[1:self.NX, 2:]
             - self.p[1:self.NX, :-2]) / 2
         self.set_vel_bnd()
     
