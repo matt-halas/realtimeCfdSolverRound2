@@ -4,7 +4,7 @@ class Settings:
     def __init__(self):
         self.screenHeight = 800
         self.screenWidth = 800
-        self.NX = 30
-        self.NY = 30
+        self.NX = 40
+        self.NY = 40
         self.cellSizeX = self.screenWidth / self.NX
         self.cellSizeY = self.screenHeight / self.NY

@@ -19,7 +19,7 @@ class Solver:
         self.populate_cell_center()
 
         self.diff = 0.0001
-        self.visc = 0.00001
+        self.visc = 0.000001
         self.dt = 0.1
         self.dissolveRate = 0.001
 
@@ -68,14 +68,14 @@ class Solver:
         if pygame.mouse.get_pressed()[0]:
             self.add_dye()
     
-    def add_dye(self, dyeSpeed = 600):
+    def add_dye(self, dyeSpeed = 200):
         mouse_pos = pygame.mouse.get_pos()
         #mouse_pos[0] is x position - differs from physical position outlined in cell centers
         x_idx = np.int(mouse_pos[0] // self.cellSizeX)
         y_idx = np.int(mouse_pos[1] // self.cellSizeY)
         self.dye[x_idx, y_idx] += dyeSpeed
-        self.vx[x_idx, y_idx] = 10
-        self.vy[x_idx, y_idx] = 10
+        self.vx[x_idx, y_idx] = 100
+        self.vy[x_idx, y_idx] = 100
 
     def update_screen(self):
         #Uses the dye value at the end of each time step to draw on the display
@@ -83,22 +83,20 @@ class Solver:
             for j in range(self.NY):
                 rect = pygame.Rect(i * self.cellSizeX, j * self.cellSizeY,
                     self.cellSizeX, self.cellSizeY)
-                if self.dye[i, j] > 255:
-                    rect_color = (255, 255, 255)
-                else:
-                    rect_color = (self.dye[i, j],
-                        self.dye[i, j],self.dye[i, j])
-                pygame.draw.rect(self.screen, rect_color, rect)
+                dyeColor = self.dye[i, j]
+                velColor = (self.vx[i, j]**2 + self.vy[i, j]**2)**0.5 * dyeColor
+                if dyeColor > 255:
+                    dyeColor = 255
+                if velColor > 255:
+                    velColor = 255
+                pygame.draw.rect(self.screen, (velColor, 0, dyeColor), rect)
         
         pygame.display.flip()
 
     def step_dye(self):
         self.dye_n[:] = self.dye[:]
         self.advect(self.dye, self.dye_n)
-        self.dye[:] = self.dye_n[:]
-        self.set_cont_bnd(self.dye)
         self.diffuse(self.dye, self.dye_n, self.diff)
-        self.dye[:] = self.dye_n[:]
         self.dissolve_dye()
         self.set_cont_bnd(self.dye)
     
@@ -107,35 +105,29 @@ class Solver:
         self.vy_n[:] = self.vy[:]
         self.diffuse(self.vx, self.vx_n, self.visc, isVel=True)
         self.diffuse(self.vy, self.vy_n, self.visc, isVel=True)
-        self.vx[:] = self.vx_n[:]
-        self.vy[:] = self.vy_n[:]
-        self.set_vel_bnd()
-        self.project()
+        #self.project()
         self.vx_n[:] = self.vx[:]
         self.vy_n[:] = self.vy[:]
-        self.advect(self.vx, self.vx_n)
-        self.advect(self.vy, self.vy_n)
-        self.vx[:] = self.vx_n[:]
-        self.vy[:] = self.vy_n[:]
-        self.project()
+        self.advect(self.vx, self.vx_n, isVel=True)
+        self.advect(self.vy, self.vy_n, isVel=True)
+        #self.project()
         self.set_vel_bnd()
     
     def diffuse(self, y, y_n, diff, isVel=False):
-        a = diff * self.dt * self.cellSizeX * self.cellSizeY
+        a = diff * self.dt * self.NX * self.NY
+        cRecip = 1 / (1 + 4 * a)
         for k in range(20):
             for i in range(1, self.NX-1):
                 for j in range(1, self.NY-1):
-                    y_n[i, j] = (y[i, j] \
-                        + a * 0.25 * (y_n[i+1, j]
-                        + y_n[i-1, j]
-                        + y_n[i, j+1]
-                        + y_n[i, j-1])) / (1 + a)
+                    y_n[i, j] = (y[i, j] + a * (y_n[i+1, j] + y_n[i-1, j]
+                        + y_n[i, j+1] + y_n[i, j-1])) * cRecip
+            y[:] = y_n[:]            
             if isVel:
                 self.set_vel_bnd()
             else:
-                self.set_cont_bnd(y_n)
+                self.set_cont_bnd(y)
 
-    def advect(self, y, y_n):
+    def advect(self, y, y_n, isVel=False):
         for i in range(1, self.NX-1):
             for j in range(1, self.NY-1):
                 x_cell, y_cell = self.cellCenter[i,j]
@@ -154,6 +146,11 @@ class Solver:
                 y_n[i,j] = lerp(self.cellCenter[xi, yi, 1],
                     self.cellCenter[xi, yi+1, 1], y_adv,
                     interpx1, interpx2)
+        y[:] = y_n[:]
+        if isVel:
+            self.set_vel_bnd()
+        else:
+            self.set_cont_bnd(y)
     
     def project(self):
         self.p[:] = 0
