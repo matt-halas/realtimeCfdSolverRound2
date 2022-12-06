@@ -6,7 +6,6 @@ from utilities import *
 from settings import Settings
 
 class Solver:
-
     def __init__(self):
         pygame.init()
         self.settings = Settings()
@@ -74,8 +73,8 @@ class Solver:
         x_idx = np.int(mouse_pos[0] // self.cellSizeX)
         y_idx = np.int(mouse_pos[1] // self.cellSizeY)
         self.dye[x_idx, y_idx] += dyeSpeed
-        self.vx[x_idx, y_idx] = 100
-        self.vy[x_idx, y_idx] = 100
+        self.vx[x_idx, y_idx] = 0.1
+        self.vy[x_idx, y_idx] = 0.1
 
     def update_screen(self):
         #Uses the dye value at the end of each time step to draw on the display
@@ -84,7 +83,7 @@ class Solver:
                 rect = pygame.Rect(i * self.cellSizeX, j * self.cellSizeY,
                     self.cellSizeX, self.cellSizeY)
                 dyeColor = self.dye[i, j]
-                velColor = (self.vx[i, j]**2 + self.vy[i, j]**2)**0.5 * dyeColor
+                velColor = (self.vx[i, j]**2 + self.vy[i, j]**2)**0.5 * 3
                 if dyeColor > 255:
                     dyeColor = 255
                 if velColor > 255:
@@ -95,10 +94,10 @@ class Solver:
 
     def step_dye(self):
         self.dye_n[:] = self.dye[:]
-        self.advect(self.dye, self.dye_n)
         self.diffuse(self.dye, self.dye_n, self.diff)
-        self.dissolve_dye()
-        self.set_cont_bnd(self.dye)
+        #self.advect(self.dye, self.dye_n)
+        #self.dissolve_dye()
+        #self.set_cont_bnd(self.dye)
     
     def step_vel(self):
         self.vx_n[:] = self.vx[:]
@@ -108,10 +107,10 @@ class Solver:
         #self.project()
         self.vx_n[:] = self.vx[:]
         self.vy_n[:] = self.vy[:]
-        self.advect(self.vx, self.vx_n, isVel=True)
-        self.advect(self.vy, self.vy_n, isVel=True)
+        #self.advect(self.vx, self.vx_n, isVel=True)
+        #self.advect(self.vy, self.vy_n, isVel=True)
         #self.project()
-        self.set_vel_bnd()
+        #self.set_vel_bnd()
     
     def diffuse(self, y, y_n, diff, isVel=False):
         a = diff * self.dt * self.NX * self.NY

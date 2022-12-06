@@ -56,14 +56,14 @@ def check_events():
     if pygame.mouse.get_pressed()[0]:
         add_dye()
 
-def add_dye(dye_speed=100):
+def add_dye(dye_speed=300):
     mouse_pos = pygame.mouse.get_pos()
     #mouse_pos[0] is x position - differs from physical position outlined in cell centers
     x_idx = mouse_pos[0] // CELL_SIZE
     y_idx = mouse_pos[1] // CELL_SIZE
     dye_c[two_to_one(x_idx, y_idx)] += dye_speed
-    vx_c[two_to_one(x_idx, y_idx)] = 2
-    vy_c[two_to_one(x_idx, y_idx)] = 2
+    vx_c[two_to_one(x_idx, y_idx)] = 1
+    vy_c[two_to_one(x_idx, y_idx)] = 1
 
 def draw_dye():
     # Uses the dye_c value at the end of each time step to draw on the display
